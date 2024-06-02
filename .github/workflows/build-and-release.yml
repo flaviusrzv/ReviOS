@@ -76,8 +76,8 @@ jobs:
             echo "BETA=$(python get_versions.py | awk 'NR==3{print $1}')" >> $env:GITHUB_ENV
           } catch {
             echo "Script execution failed, setting defaults"
-            echo "CANARY=26063" >> $env:GITHUB_ENV
-            echo "DEV=26058" >> $env:GITHUB_ENV
+            echo "CANARY=26227" >> $env:GITHUB_ENV
+            echo "DEV=26120" >> $env:GITHUB_ENV
             echo "BETA=22635" >> $env:GITHUB_ENV
           }
 
@@ -132,6 +132,7 @@ jobs:
             - `19045`
             - `22621`
             - `22631`
+            - `26100`
             
             ## Note:
               
