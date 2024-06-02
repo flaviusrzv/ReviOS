@@ -31,7 +31,8 @@ new_versions = [
     '19044',
     '19045',
     '22621',
-    '22631'
+    '22631',
+    '26100'
     ]
 
 playbook_file = 'src/playbook.conf'
