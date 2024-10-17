@@ -61,11 +61,11 @@ jobs:
 #
       - name: Archive content
         run: |
-          7z a -pmalte -mhe=on "Revi-PB-${{ env.VERSION }}.apbx" ./src/*
+          7z a -pmalte -mhe=on ${{ env.FILENAME }} ./src/*
 
       - name: Generate SHA256
         run: |
-          $hash = (Get-FileHash -Algorithm SHA256 -Path "Revi-PB-${{ env.VERSION }}.apbx").Hash
+          $hash = (Get-FileHash -Algorithm SHA256 -Path ${{ env.FILENAME }}).Hash
           echo ("HASH=" + $hash) >> $env:GITHUB_ENV
 
       - name: Set up Python
@@ -121,13 +121,12 @@ jobs:
         if: success()
         uses: svenstaro/upload-release-action@v2
         with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }} # Uses GitHub token for authentication
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: ${{ env.FILENAME }}
           asset_name: ${{ env.FILENAME }}
           tag: ${{ github.ref }}
           release_name: ReviOS build
           overwrite: true
-		  prerelease: false # Always set to false
           body: |
             # ReviOS build with insider support
 
