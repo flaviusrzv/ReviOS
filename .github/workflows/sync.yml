@@ -1,0 +1,38 @@
+name: Sync fork with upstream
+
+on:
+    workflow_dispatch:
+    schedule:
+        - cron: '0 */6 * * *'
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+#        token: ${{ secrets.PAT }}
+        ref: main
+        fetch-depth: 0  # Fetch all history
+
+    - name: Configure Git
+      run: |
+        git config --global user.name 'github-actions'
+        git config --global user.email 'github-actions@github.com'
+
+    - name: Add upstream remote
+      run: |
+        git remote add upstream https://github.com/meetrevision/playbook.git
+        git fetch upstream
+
+    - name: Merge upstream changes
+      run: |
+        git merge -X ours upstream/main
+        git checkout --ours -- README.md src/playbook.conf
+        git add -A README.md src/playbook.conf
+        git merge --strategy-option=theirs upstream/main
+
+    - name: Push changes
+      run: |
+        git push origin refs/heads/main
