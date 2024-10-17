@@ -1,0 +1,156 @@
+name: Build and release
+
+on:
+  # Allow manual triggering
+  workflow_dispatch:
+  push:
+    branches:
+      - dev
+  schedule:
+    - cron: '30 0 * * *'
+
+env:
+  SXSC_REPO: 'https://github.com/Atlas-OS/sxsc'
+  FILENAME: 'ReviOS-PB-${{ github.event.workflow_run.started_at }}.apbx'
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: 'dev'
+
+      - name: Set version
+        id: set_version
+        run: |
+          # Get current date in "YY.MM.DD" format
+          CURRENT_DATE=$(date +%y.%m.%d)
+          echo "VERSION=${CURRENT_DATE}" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Update version
+        run: |
+          $version = "${{ env.VERSION }}"
+          $playbookConfPath = "src\playbook.conf"
+          $finalizeCMDPath = "src\Executables\FINALIZE.cmd"
+
+          (Get-Content -Path $playbookConfPath) -replace '<Version>.*</Version>', "<Version>$version</Version>" | Set-Content -Path $playbookConfPath
+          (Get-Content -Path $finalizeCMDPath) -replace 'set version=.+', "set version=$version" | Set-Content -Path $finalizeCMDPath
+        shell: pwsh
+#
+#      - name: Git clone sxsc
+#        run: git clone --depth=1 ${{ env.SXSC_REPO }} sxsc-src
+#
+#      - name: Build cab
+#        run: |
+#          pip install -r requirements.txt | Out-Null
+#          $systemPackages = "..\src\Executables\CAB\" 
+#
+#          foreach ($file in Get-ChildItem -Path $systemPackages -Recurse -File -Filter "*.yaml") {
+#            Copy-Item -Path $file.FullName -Destination "cfg.yaml" -Force | Out-Null
+#            python sxsc.py
+#            if ($LASTEXITCODE -ne 0) { exit 1 }
+#            .\build.bat
+#            Move-Item -Path *.cab -Destination "..\src\Executables\CAB" -Force | Out-Null
+#            .\clean.bat
+#          }
+#        working-directory: sxsc-src
+#
+      - name: Archive content
+        run: |
+          7z a -pmalte -mhe=on "Revi-PB-${{ env.VERSION }}.apbx" ./src/*
+
+      - name: Generate SHA256
+        run: |
+          $hash = (Get-FileHash -Algorithm SHA256 -Path "Revi-PB-${{ env.VERSION }}.apbx").Hash
+          echo ("HASH=" + $hash) >> $env:GITHUB_ENV
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.8
+  
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+  
+      - name: Run script and set outputs
+        run: |
+          $ErrorActionPreference = "Stop"
+          try {
+            python get_versions.py
+            echo "CANARY=$(python get_versions.py | awk 'NR==1{print $1}')" >> $env:GITHUB_ENV
+            echo "DEV=$(python get_versions.py | awk 'NR==2{print $1}')" >> $env:GITHUB_ENV
+            echo "BETA=$(python get_versions.py | awk 'NR==3{print $1}')" >> $env:GITHUB_ENV
+          } catch {
+            echo "Script execution failed, setting defaults"
+            echo "CANARY=26227" >> $env:GITHUB_ENV
+            echo "DEV=26120" >> $env:GITHUB_ENV
+            echo "BETA=22635" >> $env:GITHUB_ENV
+          }
+
+      - name: Replace versions in playbook.conf
+        if: success()
+        run: |
+          python set_plbk_version.py
+
+      - name: Replace string in README
+        if: success()
+        run: |
+          sed -i "s|Canary%20Channel-[0-9]*-blue|Canary%20Channel-${{ env.CANARY }}-blue|g" README.md
+          sed -i "s|Dev%20Channel-[0-9]*-green|Dev%20Channel-${{ env.DEV }}-green|g" README.md
+          sed -i "s|Beta%20Channel-[0-9]*-orange|Beta%20Channel-${{ env.BETA }}-orange|g" README.md
+
+      - name: Commit changes
+        if: success()
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add -A README.md src/playbook.conf
+          git commit -am "Updated supported versions and readme" || true
+
+      - name: Push changes
+        if: success()
+        run: git push -f || true
+
+      - name: Release
+        if: success()
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }} # Uses GitHub token for authentication
+          file: ${{ env.FILENAME }}
+          asset_name: ${{ env.FILENAME }}
+          tag: ${{ github.ref }}
+          release_name: ReviOS build
+          overwrite: true
+		  prerelease: false # Always set to false
+          body: |
+            # ReviOS build with insider support
+
+            This is an auto generated build of ReviOS with support for the newest windows 11 insider builds.
+
+            ## Supported (insider) versions:
+
+            - Canary: `${{ env.CANARY }}`
+            - Dev: `${{ env.DEV }}`
+            - Beta: `${{ env.BETA }}`
+
+            ### Older (non insider) versions:
+            
+            - `19044`
+            - `19045`
+            - `22621`
+            - `22631`
+            - `26100`
+            
+            ## Note:
+              
+            Again, this is even more unsupported than the official ReviOS releases.
+
+            Use at your own risk and enjoy👍
+            
+            SHA256: `${{ env.HASH }}`
