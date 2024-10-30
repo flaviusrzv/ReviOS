@@ -1,5 +1,5 @@
 @echo off
-set version=24.10.29
+set version=24.10.30
 for /f "tokens=3" %%i in ('reg query "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion" /v "CurrentBuild"') do set "build=%%i"
 if %build% gtr 19045 ( set "w11=true" )
 
